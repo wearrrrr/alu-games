@@ -1,0 +1,14 @@
+{
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [ {
+      "source": "/arc-sw.js",
+      "destination": "https://arc.io/arc-sw.js"
+    } ]
+  }
+}
