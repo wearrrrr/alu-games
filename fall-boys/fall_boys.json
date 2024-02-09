@@ -1,0 +1,16 @@
+{
+"companyName": "BestCrazyGames",
+"productName": "Fall Boys Multiplayer",
+"productVersion": "7",
+"dataUrl": "fall_boys.data.unityweb",
+"wasmCodeUrl": "fall_boys.wasm.code.unityweb",
+"wasmFrameworkUrl": "fall_boys.wasm.framework.unityweb",
+"graphicsAPI": ["WebGL 2.0","WebGL 1.0"],
+"webglContextAttributes": {"preserveDrawingBuffer": false},
+"splashScreenStyle": "Dark",
+"backgroundColor": "#000000",
+"cacheControl": {"default": "must-revalidate"},
+"developmentBuild": false,
+"multithreading": false,
+"unityVersion": "2019.3.15f1"
+}
