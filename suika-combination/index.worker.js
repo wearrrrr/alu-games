@@ -1,105 +1,161 @@
-// This service worker is required to expose an exported Godot project as a
-// Progressive Web App. It provides an offline fallback page telling the user
-// that they need an Internet connection to run the project if desired.
-// Incrementing CACHE_VERSION will kick off the install event and force
-// previously cached resources to be updated from the network.
-const CACHE_VERSION = "1707205889|387354499";
-const CACHE_PREFIX = "SuikaCombination-sw-cache-";
-const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
-const OFFLINE_URL = "index.offline.html";
-// Files that will be cached on load.
-const CACHED_FILES = ["index.html","index.js","index.offline.html","index.icon.png","index.apple-touch-icon.png","index.worker.js","index.audio.worklet.js"];
-// Files that we might not want the user to preload, and will only be cached on first load.
-const CACHABLE_FILES = ["index.wasm","index.pck"];
-const FULL_CACHE = CACHED_FILES.concat(CACHABLE_FILES);
+/**
+ * @license
+ * Copyright 2015 The Emscripten Authors
+ * SPDX-License-Identifier: MIT
+ */
 
-self.addEventListener("install", (event) => {
-	event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(CACHED_FILES)));
-});
+// Pthread Web Worker startup routine:
+// This is the entry point file that is loaded first by each Web Worker
+// that executes pthreads on the Emscripten application.
 
-self.addEventListener("activate", (event) => {
-	event.waitUntil(caches.keys().then(
-		function (keys) {
-			// Remove old caches.
-			return Promise.all(keys.filter(key => key.startsWith(CACHE_PREFIX) && key != CACHE_NAME).map(key => caches.delete(key)));
-		}).then(function() {
-			// Enable navigation preload if available.
-			return ("navigationPreload" in self.registration) ? self.registration.navigationPreload.enable() : Promise.resolve();
-		})
-	);
-});
+'use strict';
 
-async function fetchAndCache(event, cache, isCachable) {
-	// Use the preloaded response, if it's there
-	let response = await event.preloadResponse;
-	if (!response) {
-		// Or, go over network.
-		response = await self.fetch(event.request);
-	}
-	if (isCachable) {
-		// And update the cache
-		cache.put(event.request, response.clone());
-	}
-	return response;
+var Module = {};
+
+// Thread-local guard variable for one-time init of the JS state
+var initializedJS = false;
+
+function assert(condition, text) {
+  if (!condition) abort('Assertion failed: ' + text);
 }
 
-self.addEventListener("fetch", (event) => {
-	const isNavigate = event.request.mode === "navigate";
-	const url = event.request.url || "";
-	const referrer = event.request.referrer || "";
-	const base = referrer.slice(0, referrer.lastIndexOf("/") + 1);
-	const local = url.startsWith(base) ? url.replace(base, "") : "";
-	const isCachable = FULL_CACHE.some(v => v === local) || (base === referrer && base.endsWith(CACHED_FILES[0]));
-	if (isNavigate || isCachable) {
-		event.respondWith(async function () {
-			// Try to use cache first
-			const cache = await caches.open(CACHE_NAME);
-			if (event.request.mode === "navigate") {
-				// Check if we have full cache during HTML page request.
-				const fullCache = await Promise.all(FULL_CACHE.map(name => cache.match(name)));
-				const missing = fullCache.some(v => v === undefined);
-				if (missing) {
-					try {
-						// Try network if some cached file is missing (so we can display offline page in case).
-						return await fetchAndCache(event, cache, isCachable);
-					} catch (e) {
-						// And return the hopefully always cached offline page in case of network failure.
-						console.error("Network error: ", e);
-						return await caches.match(OFFLINE_URL);
-					}
-				}
-			}
-			const cached = await cache.match(event.request);
-			if (cached) {
-				return cached;
-			} else {
-				// Try network if don't have it in cache.
-				return await fetchAndCache(event, cache, isCachable);
-			}
-		}());
-	}
-});
+function threadPrintErr() {
+  var text = Array.prototype.slice.call(arguments).join(' ');
+  console.error(text);
+}
+function threadAlert() {
+  var text = Array.prototype.slice.call(arguments).join(' ');
+  postMessage({cmd: 'alert', text: text, threadId: Module['_pthread_self']()});
+}
+// We don't need out() for now, but may need to add it if we want to use it
+// here. Or, if this code all moves into the main JS, that problem will go
+// away. (For now, adding it here increases code size for no benefit.)
+var out = () => { throw 'out() is not defined in worker.js.'; }
+var err = threadPrintErr;
+self.alert = threadAlert;
 
-self.addEventListener("message", (event) => {
-	// No cross origin
-	if (event.origin != self.origin) {
-		return;
-	}
-	const id = event.source.id || "";
-	const msg = event.data || "";
-	// Ensure it's one of our clients.
-	self.clients.get(id).then(function (client) {
-		if (!client) {
-			return; // Not a valid client.
-		}
-		if (msg === "claim") {
-			self.skipWaiting().then(() => self.clients.claim());
-		} else if (msg === "clear") {
-			caches.delete(CACHE_NAME);
-		} else if (msg === "update") {
-			self.skipWaiting().then(() => self.clients.claim()).then(() => self.clients.matchAll()).then(all => all.forEach(c => c.navigate(c.url)));
-		} else {
-			onClientMessage(event);
-		}
-	});
-});
+Module['instantiateWasm'] = (info, receiveInstance) => {
+  // Instantiate from the module posted from the main thread.
+  // We can just use sync instantiation in the worker.
+  var module = Module['wasmModule'];
+  // We don't need the module anymore; new threads will be spawned from the main thread.
+  Module['wasmModule'] = null;
+  var instance = new WebAssembly.Instance(module, info);
+  // TODO: Due to Closure regression https://github.com/google/closure-compiler/issues/3193,
+  // the above line no longer optimizes out down to the following line.
+  // When the regression is fixed, we can remove this if/else.
+  return receiveInstance(instance);
+}
+
+// Turn unhandled rejected promises into errors so that the main thread will be
+// notified about them.
+self.onunhandledrejection = (e) => {
+  throw e.reason ?? e;
+};
+
+function handleMessage(e) {
+  try {
+    if (e.data.cmd === 'load') { // Preload command that is called once per worker to parse and load the Emscripten code.
+
+    // Until we initialize the runtime, queue up any further incoming messages.
+    let messageQueue = [];
+    self.onmessage = (e) => messageQueue.push(e);
+
+    // And add a callback for when the runtime is initialized.
+    self.startWorker = (instance) => {
+      Module = instance;
+      // Notify the main thread that this thread has loaded.
+      postMessage({ 'cmd': 'loaded' });
+      // Process any messages that were queued before the thread was ready.
+      for (let msg of messageQueue) {
+        handleMessage(msg);
+      }
+      // Restore the real message handler.
+      self.onmessage = handleMessage;
+    };
+
+      // Module and memory were sent from main thread
+      Module['wasmModule'] = e.data.wasmModule;
+
+      // Use `const` here to ensure that the variable is scoped only to
+      // that iteration, allowing safe reference from a closure.
+      for (const handler of e.data.handlers) {
+        Module[handler] = function() {
+          postMessage({ cmd: 'callHandler', handler, args: [...arguments] });
+        }
+      }
+
+      Module['wasmMemory'] = e.data.wasmMemory;
+
+      Module['buffer'] = Module['wasmMemory'].buffer;
+
+      Module['workerID'] = e.data.workerID;
+
+      Module['ENVIRONMENT_IS_PTHREAD'] = true;
+
+      if (typeof e.data.urlOrBlob == 'string') {
+        importScripts(e.data.urlOrBlob);
+      } else {
+        var objectUrl = URL.createObjectURL(e.data.urlOrBlob);
+        importScripts(objectUrl);
+        URL.revokeObjectURL(objectUrl);
+      }
+      Godot(Module);
+    } else if (e.data.cmd === 'run') {
+      // Pass the thread address to wasm to store it for fast access.
+      Module['__emscripten_thread_init'](e.data.pthread_ptr, /*isMainBrowserThread=*/0, /*isMainRuntimeThread=*/0, /*canBlock=*/1);
+
+      // Await mailbox notifications with `Atomics.waitAsync` so we can start
+      // using the fast `Atomics.notify` notification path.
+      Module['__emscripten_thread_mailbox_await'](e.data.pthread_ptr);
+
+      assert(e.data.pthread_ptr);
+      // Also call inside JS module to set up the stack frame for this pthread in JS module scope
+      Module['establishStackSpace']();
+      Module['PThread'].receiveObjectTransfer(e.data);
+      Module['PThread'].threadInitTLS();
+
+      if (!initializedJS) {
+        initializedJS = true;
+      }
+
+      try {
+        Module['invokeEntryPoint'](e.data.start_routine, e.data.arg);
+      } catch(ex) {
+        if (ex != 'unwind') {
+          // The pthread "crashed".  Do not call `_emscripten_thread_exit` (which
+          // would make this thread joinable).  Instead, re-throw the exception
+          // and let the top level handler propagate it back to the main thread.
+          throw ex;
+        }
+      }
+    } else if (e.data.cmd === 'cancel') { // Main thread is asking for a pthread_cancel() on this thread.
+      if (Module['_pthread_self']()) {
+        Module['__emscripten_thread_exit'](-1);
+      }
+    } else if (e.data.target === 'setimmediate') {
+      // no-op
+    } else if (e.data.cmd === 'checkMailbox') {
+      if (initializedJS) {
+        Module['checkMailbox']();
+      }
+    } else if (e.data.cmd) {
+      // The received message looks like something that should be handled by this message
+      // handler, (since there is a e.data.cmd field present), but is not one of the
+      // recognized commands:
+      err('worker.js received unknown command ' + e.data.cmd);
+      err(e.data);
+    }
+  } catch(ex) {
+    err('worker.js onmessage() captured an uncaught exception: ' + ex);
+    if (ex && ex.stack) err(ex.stack);
+    if (Module['__emscripten_thread_crashed']) {
+      Module['__emscripten_thread_crashed']();
+    }
+    throw ex;
+  }
+};
+
+self.onmessage = handleMessage;
+
+
