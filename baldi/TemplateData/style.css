@@ -10,6 +10,7 @@
     left: 50%;
     -webkit-transform: translate(-50%, -50%);
     transform: translate(-50%, -50%);
+    background-color: black;
 }
 
 .webgl-content .logo,
@@ -62,11 +63,12 @@
 }
 
 .webgl-content .footer {
-    margin-top: 5px;
     height: 38px;
     line-height: 38px;
     font-family: Helvetica, Verdana, Arial, sans-serif;
     font-size: 18px;
+    background-color: white;
+    padding: 5px;
 }
 
 .webgl-content .footer .webgl-logo,
