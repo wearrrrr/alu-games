@@ -1227,7 +1227,7 @@ Game.Launch=function()
 		
 		Game.SaveTo='CookieClickerGame';
 		if (Game.beta) Game.SaveTo='CookieClickerGameBeta';
-		l('versionNumber').innerHTML='v. '+Game.version+'<div id="httpsSwitch" style="cursor:pointer;display:inline-block;background:url(img/'+(Game.https?'lockOn':'lockOff')+'.png);width:16px;height:16px;position:relative;top:4px;left:0px;margin:0px -2px;"></div>'+(Game.beta?' <span style="color:#ff0;">beta</span>':'');
+		l('versionNumber').innerHTML='v. '+Game.version+(Game.beta?' <span style="color:#ff0;">beta</span>':'');
 		
 		Game.lastActivity=Date.now();//reset on mouse move, key press or click
 		
@@ -1901,12 +1901,12 @@ Game.Launch=function()
 		
 		
 		
-		Game.attachTooltip(l('httpsSwitch'),'<div style="padding:8px;width:350px;text-align:center;font-size:11px;">You are currently playing Cookie Clicker on the <b>'+(Game.https?'HTTPS':'HTTP')+'</b> protocol.<br>The <b>'+(Game.https?'HTTP':'HTTPS')+'</b> version uses a different save slot than this one.<br>Click this lock to reload the page and switch to the <b>'+(Game.https?'HTTP':'HTTPS')+'</b> version!</div>','this');
-		AddEvent(l('httpsSwitch'),'click',function(){
-			PlaySound('snd/pop'+Math.floor(Math.random()*3+1)+'.mp3',0.75);
-			if (location.protocol=='https:') location.href='http:'+window.location.href.substring(window.location.protocol.length);
-			else if (location.protocol=='http:') location.href='https:'+window.location.href.substring(window.location.protocol.length);
-		});
+		// Game.attachTooltip(l('httpsSwitch'),'<div style="padding:8px;width:350px;text-align:center;font-size:11px;">You are currently playing Cookie Clicker on the <b>'+(Game.https?'HTTPS':'HTTP')+'</b> protocol.<br>The <b>'+(Game.https?'HTTP':'HTTPS')+'</b> version uses a different save slot than this one.<br>Click this lock to reload the page and switch to the <b>'+(Game.https?'HTTP':'HTTPS')+'</b> version!</div>','this');
+		// AddEvent(l('httpsSwitch'),'click',function(){
+		// 	PlaySound('snd/pop'+Math.floor(Math.random()*3+1)+'.mp3',0.75);
+		// 	if (location.protocol=='https:') location.href='http:'+window.location.href.substring(window.location.protocol.length);
+		// 	else if (location.protocol=='http:') location.href='https:'+window.location.href.substring(window.location.protocol.length);
+		// });
 		
 		Game.attachTooltip(l('topbarTwitter'),'<div style="padding:8px;width:250px;text-align:center;">Orteil\'s twitter, which frequently features game updates.</div>','this');
 		Game.attachTooltip(l('topbarTumblr'),'<div style="padding:8px;width:250px;text-align:center;">Orteil\'s tumblr, which frequently features game updates.</div>','this');
@@ -14461,20 +14461,15 @@ window.onload=function()
 	
 	if (!Game.ready)
 	{
-		if (top!=self) Game.ErrorFrame();
-		else
-		{
-			console.log('[=== '+choose([
-				'Oh, hello!',
-				'hey, how\'s it hangin',
-				'3kh0 is the best lol',
-				'About to cheat in some cookies or just checking for bugs?',
-				'Remember : cheated cookies taste awful!',
-				'Hey, Orteil here. Cheated cookies taste awful... or do they?',
-			])+' ===]');
-			Game.Load();
-			//try {Game.Load();}
-			//catch(err) {console.log('ERROR : '+err.message);}
-		}
+		console.log('[=== '+choose([
+			'Oh, hello!',
+			'hey, how\'s it hangin',
+			'About to cheat in some cookies or just checking for bugs?',
+			'Remember : cheated cookies taste awful!',
+			'Hey, Orteil here. Cheated cookies taste awful... or do they?',
+		])+' ===]');
+		Game.Load();
+		//try {Game.Load();}
+		//catch(err) {console.log('ERROR : '+err.message);}
 	}
 };
