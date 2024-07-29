@@ -1,0 +1,23 @@
+{
+  "short_name": "Doodle Jump",
+  "name": "Doodle Jump",
+  "description": "Play the classic Doodle Jump game online. No fuss. 100% free.",
+  "icons": [
+	{
+	  "src": "images/doodle-jump-game-icon-192.png",
+	  "type": "image/png",
+	  "sizes": "192x192"
+	},
+  {
+    "src": "images/doodle-jump-game-icon-512.png",
+    "type": "image/png",
+    "sizes": "512x512"
+  }
+  ],
+  "start_url": "/?utm_source=pwa",
+  "scope": "/",
+  "background_color": "#0e0e0e",
+  "theme_color": "#0e0e0e",
+  "display": "fullscreen",
+  "orientation": "portrait"
+}
